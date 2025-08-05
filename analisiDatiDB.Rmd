@@ -1,0 +1,112 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(RPostgres)
+library(dplyr)
+library(dbplyr)
+library(plotly)
+```
+```{r}
+# Impostazione dei parametri di connessione
+dbname <- "biblioteca"
+host <- "localhost"
+port <- 5432  # La porta predefinita di PostgreSQL è 5432, ma assicurati che corrisponda alla configurazione del tuo server
+user <- "postgres"
+password <- "basi2024"
+
+# Connessione al server PostgreSQL
+con <- dbConnect(Postgres(), dbname = dbname, host = host, port = port, user = user, password = password)
+
+```
+```{r}
+# quanti libri libri sono stati pubblicati per anno
+libro <- tbl(con,"libro")
+
+libro <- libro %>%
+         group_by(annopubblicazione) %>%
+            summarise(count = n()) %>%
+            collect()
+
+# Crea il grafico a barre interattivo con plotly
+plot_ly(data = libro, x = ~annopubblicazione, y = ~count, type = "bar", marker = list(color = "skyblue")) %>%
+  plotly::layout(xaxis = list(title = "Anno di pubblicazione"),
+         yaxis = list(title = "Numero di libri"),
+         title = "Numero di libri pubblicati per anno")
+```
+```{r}
+# Correlazione tra Numero di Libri Scritti e Anno di Pubblicazione per Ciascun Autore
+autore <- tbl(con, "autore")
+scritto <- tbl(con,"scritto")
+libro <- tbl(con,"libro")
+
+uniti <- autore %>%
+          left_join(scritto, by="codiceautore") %>%
+          left_join(libro, by="isbn")
+
+uniti <- uniti %>%
+          group_by(annopubblicazione,nome,cognome) %>%
+          summarise(count = n(), .groups = 'drop') %>%
+          collect()            
+
+uniti <- uniti %>%
+         dplyr::filter(count>=5)
+
+# Crea il grafico a barre interattivo con plotly
+plot_ly(data = uniti, x = ~cognome, y = ~count, type = "bar", marker = list(color = "green")) %>%
+  plotly::layout(xaxis = list(title = "Autori"),
+         yaxis = list(title = "Numero di libri"),
+         title = "Numero di libri pubblicati per anno")
+```
+```{r}
+# libri per genere
+appartiene <- tbl(con, "appartiene")
+appartiene <- appartiene %>%
+            group_by(nome) %>%
+            summarise(count = n()) %>%
+            collect()
+
+appartiene <- appartiene %>%
+            dplyr::filter(count>810)
+
+# Creare il diagramma a torta con plotly
+plot_ly(appartiene, labels = ~nome, values = ~count, type = 'pie') %>%
+  plotly::layout(title = "Distribuzione dei libri per genere")
+
+```
+```{r}
+# libri pubblicati per casa editrice
+pubblica <- tbl(con, "pubblica")
+
+pubblica <- pubblica %>%
+            group_by(nome) %>%
+            summarise(count = n()) %>%
+            collect()
+
+media <- mean(pubblica$count)
+media
+
+pubblica <- pubblica %>%
+            dplyr::filter(count>35)
+
+# Creare l'istogramma con plotly
+plot_ly(pubblica, x = ~nome, y = ~count, type = 'bar') %>%
+  plotly::layout(title = "Distribuzione dei libri per casa editrice", xaxis = list(title = "Casa Editrice"), yaxis = list(title = "Count"))
+```
+```{r}
+# Distribuzione Libri per nazione di pubblicazione
+casaeditrice <- tbl(con,"casaeditrice")
+
+casaeditrice <- casaeditrice %>%
+                group_by(nazione) %>%
+                summarise(count = n()) %>%
+                collect()
+
+casaeditrice <- casaeditrice %>%
+            dplyr::filter(count>32)
+
+# Creare il diagramma a torta con plotly
+plot_ly(casaeditrice, labels = ~nazione, values = ~count, type = 'pie') %>%
+  plotly::layout(title = "Distribuzione delle case editrice per paese")
+```
